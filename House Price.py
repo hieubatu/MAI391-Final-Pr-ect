@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import re
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import r2_score
 
 # ==========================================
@@ -41,17 +41,25 @@ df_clean = df_clean[(df_clean['Area_Sqft'] < 10000) & (df_clean['Price_Rupees'] 
 print(f"Đã dọn dẹp xong! Còn lại {df_clean.shape[0]} căn nhà hợp lệ.\n")
 
 # ==========================================
-# 3. HUẤN LUYỆN MÔ HÌNH LINEAR REGRESSION
+# 3. HUẤN LUYỆN MÔ HÌNH RANDOM FOREST
 # ==========================================
 X = df_clean[['Area_Sqft', 'Baths']]
 y = df_clean['Price_Rupees']
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-model = LinearRegression()
-model.fit(X_train, y_train)
+# Nén giá trị bằng Logarit
+y_train_log = np.log1p(y_train) 
+y_test_log = np.log1p(y_test)
 
-y_pred = model.predict(X_test)
-print(f" Điểm số R-squared của mô hình: {r2_score(y_test, y_pred):.2f}\n")
+print("Đang huấn luyện mô hình Random Forest (vui lòng đợi vài giây)...")
+model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+model.fit(X_train, y_train_log)
+
+# Dự đoán và bung Logarit
+y_pred_log = model.predict(X_test)
+y_pred = np.expm1(y_pred_log)
+
+print(f"Điểm số R-squared của mô hình mới: {r2_score(y_test, y_pred):.4f}\n")
 
 # ==========================================
 # 4. HỆ THỐNG GỢI Ý & ĐỊNH GIÁ TƯƠNG TÁC
@@ -66,9 +74,10 @@ try:
     dien_tich_input = float(input("Nhập Diện tích bạn muốn (sqft): "))
     phong_tam_input = float(input("Nhập Số phòng tắm: "))
 
-    # AI định giá
+    # AI định giá (Bung logarit kết quả dự đoán)
     nha_moi = pd.DataFrame({'Area_Sqft': [dien_tich_input], 'Baths': [phong_tam_input]})
-    gia_du_doan_inr = model.predict(nha_moi)[0]
+    gia_du_doan_log = model.predict(nha_moi)[0]
+    gia_du_doan_inr = np.expm1(gia_du_doan_log)
     gia_du_doan_vnd = gia_du_doan_inr * TY_GIA
 
     print(f"\nCĂN NHÀ NÀY TRỊ GIÁ KHOẢNG: {gia_du_doan_inr:,.0f} INR (~ {gia_du_doan_vnd:,.0f} VNĐ)")
@@ -101,10 +110,10 @@ except ValueError:
 # ==========================================
 print("\nĐang mở biểu đồ phân tích... (Tắt cửa sổ biểu đồ để kết thúc chương trình)")
 plt.figure(figsize=(8, 5))
-plt.scatter(y_test, y_pred, color='blue', alpha=0.3)
+plt.scatter(y_test, y_pred, color='green', alpha=0.3)
 plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
 plt.xlabel('Giá Thực Tế (INR)')
 plt.ylabel('Giá AI Dự Đoán (INR)')
-plt.title('Hồi quy tuyến tính: Thực tế vs Dự đoán')
+plt.title('Random Forest + Log Transform: Thực tế vs Dự đoán')
 plt.grid(True)
 plt.show()
